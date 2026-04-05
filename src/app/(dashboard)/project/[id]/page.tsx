@@ -25,14 +25,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     setMilestones(m.data || []);
     setLoading(false);
   }
-
   useEffect(() => { load(); }, [id]);
 
   async function recalc(sphereId: string) {
     const { data } = await supabase.from("projects").select("progress").eq("sphere_id", sphereId).in("status", ["active", "completed"]);
-    if (!data || data.length === 0) { await supabase.from("spheres").update({ current_level: 0 }).eq("id", sphereId); return; }
+    if (!data || data.length === 0) { await supabase.from("spheres").update({ score: 0 }).eq("id", sphereId); return; }
     const avg = data.reduce((s, p) => s + p.progress, 0) / data.length;
-    await supabase.from("spheres").update({ current_level: Math.round((avg / 10) * 10) / 10 }).eq("id", sphereId);
+    await supabase.from("spheres").update({ score: Math.round((avg / 10) * 10) / 10 }).eq("id", sphereId);
   }
 
   async function setP(val: number) {
@@ -52,16 +51,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   }
 
   async function toggleMs(msId: string, done: boolean) {
-    await supabase.from("milestones").update({ is_completed: done, completed_at: done ? new Date().toISOString() : null }).eq("id", msId);
+    await supabase.from("milestones").update({ is_completed: done }).eq("id", msId);
     load();
   }
 
-  async function delMs(msId: string) {
-    await supabase.from("milestones").delete().eq("id", msId); load();
-  }
+  async function delMs(msId: string) { await supabase.from("milestones").delete().eq("id", msId); load(); }
 
   async function del() {
-    if (!project || !confirm(`Удалить?`)) return;
+    if (!project || !confirm("Удалить?")) return;
     await supabase.from("projects").delete().eq("id", id);
     await recalc(project.sphere_id);
     router.push(`/sphere/${project.sphere_id}`); router.refresh();
@@ -84,32 +81,17 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     <div className="max-w-xl animate-fade-in">
       <Link href={`/sphere/${project.sphere_id}`} className="text-white/20 hover:text-white/40 text-[11px] mb-8 inline-block transition">← Сфера</Link>
 
-      {/* Header */}
       <div className="flex items-start justify-between mb-8">
         <div>
-          <h2 className="text-lg font-medium text-white/80">{project.title}</h2>
+          <h2 className="text-lg font-medium text-white/80">{project.name}</h2>
           {project.description && <p className="text-white/25 text-xs mt-2 leading-relaxed">{project.description}</p>}
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-4">
           <button onClick={toggleStatus}
             className={`text-[10px] px-3 py-1 rounded-full border transition ${
               project.status === "completed" ? "border-white/20 text-white/50" : "border-white/[0.06] text-white/20 hover:text-white/40"
-            }`}>
-            {project.status === "completed" ? "✓ Готов" : "○ Актив"}
-          </button>
+            }`}>{project.status === "completed" ? "✓ Готов" : "○ Актив"}</button>
           <button onClick={del} className="text-white/10 hover:text-white/30 text-xs transition">×</button>
-        </div>
-      </div>
-
-      {/* Points */}
-      <div className="grid grid-cols-2 gap-3 mb-8">
-        <div className="border border-white/[0.04] rounded-lg p-4">
-          <div className="text-[9px] text-white/15 uppercase tracking-widest mb-2">Точка А</div>
-          <div className="text-xs text-white/40">{project.point_a || "—"}</div>
-        </div>
-        <div className="border border-white/[0.04] rounded-lg p-4">
-          <div className="text-[9px] text-white/15 uppercase tracking-widest mb-2">Точка Б</div>
-          <div className="text-xs text-white/40">{project.point_b || "—"}</div>
         </div>
       </div>
 
@@ -119,22 +101,17 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           <span className="text-[9px] text-white/15 uppercase tracking-widest">Прогресс</span>
           <span className="text-xl font-light text-white/60">{progress}%</span>
         </div>
-
         <div className="h-1 bg-white/[0.04] rounded-full overflow-hidden mb-4">
           <div className="h-full bg-white/30 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
         </div>
-
         <div className="flex gap-1">
           {[0, 10, 25, 50, 75, 100].map((v) => (
             <button key={v} onClick={() => setP(v)}
               className={`flex-1 py-2 rounded-lg text-[10px] transition-all ${
                 progress === v ? "bg-white/10 text-white/70" : "text-white/15 hover:text-white/30 hover:bg-white/[0.03]"
-              }`}>
-              {v}
-            </button>
+              }`}>{v}</button>
           ))}
         </div>
-
         <div className="flex items-center justify-center gap-4 mt-3">
           <button onClick={() => setP(Math.max(0, progress - 5))}
             className="w-8 h-8 rounded-full border border-white/[0.06] text-white/20 hover:text-white/40 flex items-center justify-center transition text-xs">−</button>
@@ -147,11 +124,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
       {/* Milestones */}
       <div className="mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <span className="text-[9px] text-white/15 uppercase tracking-widest">Этапы · {done}/{milestones.length}</span>
-        </div>
-
-        <div className="space-y-0.5">
+        <span className="text-[9px] text-white/15 uppercase tracking-widest">Этапы · {done}/{milestones.length}</span>
+        <div className="space-y-0.5 mt-3">
           {milestones.map((m) => (
             <div key={m.id} className={`flex items-center gap-3 py-2.5 px-2 rounded-lg group ${m.is_completed ? "" : "hover:bg-white/[0.02]"} transition`}>
               <button onClick={() => toggleMs(m.id, !m.is_completed)}
@@ -163,7 +137,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             </div>
           ))}
         </div>
-
         <form onSubmit={addMs} className="flex gap-2 mt-3">
           <input type="text" value={newMs} onChange={(e) => setNewMs(e.target.value)} placeholder="Новый этап..."
             className="flex-1 bg-transparent border border-white/[0.04] rounded-lg px-3 py-2 text-xs text-white/50 placeholder-white/10 focus:outline-none focus:border-white/10 transition" />
