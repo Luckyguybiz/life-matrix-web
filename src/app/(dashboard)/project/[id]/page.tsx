@@ -6,11 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Project, Milestone } from "@/lib/types";
 
-export default function ProjectDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [project, setProject] = useState<Project | null>(null);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
@@ -21,305 +17,158 @@ export default function ProjectDetailPage({
   const router = useRouter();
 
   async function load() {
-    const [projRes, msRes] = await Promise.all([
+    const [p, m] = await Promise.all([
       supabase.from("projects").select("*").eq("id", id).single(),
-      supabase
-        .from("milestones")
-        .select("*")
-        .eq("project_id", id)
-        .order("sort_order"),
+      supabase.from("milestones").select("*").eq("project_id", id).order("sort_order"),
     ]);
-    if (projRes.data) {
-      setProject(projRes.data);
-      setProgress(projRes.data.progress);
-    }
-    setMilestones(msRes.data || []);
+    if (p.data) { setProject(p.data); setProgress(p.data.progress); }
+    setMilestones(m.data || []);
     setLoading(false);
   }
 
-  useEffect(() => {
-    load();
-  }, [id]);
+  useEffect(() => { load(); }, [id]);
 
-  async function recalcSphere(sphereId: string) {
-    const { data: projects } = await supabase
-      .from("projects")
-      .select("progress")
-      .eq("sphere_id", sphereId)
-      .in("status", ["active", "completed"]);
-
-    if (!projects || projects.length === 0) {
-      await supabase.from("spheres").update({ current_level: 0 }).eq("id", sphereId);
-      return;
-    }
-    const avg = projects.reduce((s, p) => s + p.progress, 0) / projects.length;
-    const level = Math.round((avg / 10) * 10) / 10;
-    await supabase.from("spheres").update({ current_level: level }).eq("id", sphereId);
+  async function recalc(sphereId: string) {
+    const { data } = await supabase.from("projects").select("progress").eq("sphere_id", sphereId).in("status", ["active", "completed"]);
+    if (!data || data.length === 0) { await supabase.from("spheres").update({ current_level: 0 }).eq("id", sphereId); return; }
+    const avg = data.reduce((s, p) => s + p.progress, 0) / data.length;
+    await supabase.from("spheres").update({ current_level: Math.round((avg / 10) * 10) / 10 }).eq("id", sphereId);
   }
 
-  async function handleProgress(val: number) {
+  async function setP(val: number) {
     setProgress(val);
     if (!project) return;
     await supabase.from("projects").update({ progress: val }).eq("id", id);
-    await recalcSphere(project.sphere_id);
+    await recalc(project.sphere_id);
   }
 
-  async function handleAddMilestone(e: React.FormEvent) {
+  async function addMs(e: React.FormEvent) {
     e.preventDefault();
     if (!newMs.trim() || !project) return;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase.from("milestones").insert({
-      user_id: user.id,
-      project_id: id,
-      title: newMs.trim(),
-      sort_order: milestones.length,
-    });
-    setNewMs("");
+    await supabase.from("milestones").insert({ user_id: user.id, project_id: id, title: newMs.trim(), sort_order: milestones.length });
+    setNewMs(""); load();
+  }
+
+  async function toggleMs(msId: string, done: boolean) {
+    await supabase.from("milestones").update({ is_completed: done, completed_at: done ? new Date().toISOString() : null }).eq("id", msId);
     load();
   }
 
-  async function toggleMilestone(msId: string, completed: boolean) {
-    await supabase.from("milestones").update({
-      is_completed: completed,
-      completed_at: completed ? new Date().toISOString() : null,
-    }).eq("id", msId);
-    load();
+  async function delMs(msId: string) {
+    await supabase.from("milestones").delete().eq("id", msId); load();
   }
 
-  async function deleteMilestone(msId: string) {
-    await supabase.from("milestones").delete().eq("id", msId);
-    load();
-  }
-
-  async function handleDelete() {
-    if (!project || !confirm(`Удалить "${project.title}"?`)) return;
-    const sphereId = project.sphere_id;
+  async function del() {
+    if (!project || !confirm(`Удалить?`)) return;
     await supabase.from("projects").delete().eq("id", id);
-    await recalcSphere(sphereId);
-    router.push(`/sphere/${sphereId}`);
-    router.refresh();
+    await recalc(project.sphere_id);
+    router.push(`/sphere/${project.sphere_id}`); router.refresh();
   }
 
   async function toggleStatus() {
     if (!project) return;
-    const newStatus = project.status === "active" ? "completed" : "active";
-    const newProgress = newStatus === "completed" ? 100 : project.progress;
-    await supabase.from("projects").update({ status: newStatus, progress: newProgress }).eq("id", id);
-    await recalcSphere(project.sphere_id);
-    setProgress(newProgress);
-    load();
+    const s = project.status === "active" ? "completed" : "active";
+    const p = s === "completed" ? 100 : project.progress;
+    await supabase.from("projects").update({ status: s, progress: p }).eq("id", id);
+    await recalc(project.sphere_id); setProgress(p); load();
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="w-8 h-8 border-2 border-violet-500/30 border-t-violet-500 rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return <div className="flex items-center justify-center h-full"><div className="w-6 h-6 border border-white/20 border-t-white/60 rounded-full animate-spin" /></div>;
+  if (!project) return <div className="flex items-center justify-center h-full text-white/20">Не найден</div>;
 
-  if (!project) {
-    return (
-      <div className="flex items-center justify-center h-full text-zinc-500">
-        Проект не найден
-      </div>
-    );
-  }
-
-  const completed = milestones.filter((m) => m.is_completed).length;
-  const msPct = milestones.length > 0 ? (completed / milestones.length) * 100 : 0;
+  const done = milestones.filter((m) => m.is_completed).length;
 
   return (
-    <div className="max-w-2xl animate-fade-in relative">
-      {/* Ambient glow */}
-      <div className="absolute -top-20 -right-20 w-[250px] h-[250px] rounded-full bg-violet-600/[0.03] blur-[100px] pointer-events-none" />
-
-      <Link
-        href={`/sphere/${project.sphere_id}`}
-        className="text-zinc-600 hover:text-zinc-300 text-xs mb-6 inline-flex items-center gap-1.5 transition"
-      >
-        <span>←</span> Назад к сфере
-      </Link>
+    <div className="max-w-xl animate-fade-in">
+      <Link href={`/sphere/${project.sphere_id}`} className="text-white/20 hover:text-white/40 text-[11px] mb-8 inline-block transition">← Сфера</Link>
 
       {/* Header */}
       <div className="flex items-start justify-between mb-8">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">{project.title}</h2>
-          {project.description && (
-            <p className="text-zinc-500 text-sm mt-2 leading-relaxed">{project.description}</p>
-          )}
+          <h2 className="text-lg font-medium text-white/80">{project.title}</h2>
+          {project.description && <p className="text-white/25 text-xs mt-2 leading-relaxed">{project.description}</p>}
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-4">
-          <button
-            onClick={toggleStatus}
-            className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${
-              project.status === "completed"
-                ? "border-green-500/20 text-green-400 bg-green-400/[0.06]"
-                : "border-white/[0.06] text-zinc-400 hover:text-white hover:bg-white/[0.04]"
-            }`}
-          >
-            {project.status === "completed" ? "✓ Завершён" : "○ Активный"}
+          <button onClick={toggleStatus}
+            className={`text-[10px] px-3 py-1 rounded-full border transition ${
+              project.status === "completed" ? "border-white/20 text-white/50" : "border-white/[0.06] text-white/20 hover:text-white/40"
+            }`}>
+            {project.status === "completed" ? "✓ Готов" : "○ Актив"}
           </button>
-          <button
-            onClick={handleDelete}
-            className="text-zinc-700 hover:text-red-400 text-xs px-2 py-1.5 rounded-lg hover:bg-red-400/[0.06] transition-all"
-          >
-            ×
-          </button>
+          <button onClick={del} className="text-white/10 hover:text-white/30 text-xs transition">×</button>
         </div>
       </div>
 
-      {/* Points A → B */}
+      {/* Points */}
       <div className="grid grid-cols-2 gap-3 mb-8">
-        <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-4 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-1 h-full bg-zinc-700 rounded-r" />
-          <div className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 pl-2">
-            Точка А
-          </div>
-          <div className="text-sm text-zinc-300 pl-2">{project.point_a || "—"}</div>
+        <div className="border border-white/[0.04] rounded-lg p-4">
+          <div className="text-[9px] text-white/15 uppercase tracking-widest mb-2">Точка А</div>
+          <div className="text-xs text-white/40">{project.point_a || "—"}</div>
         </div>
-        <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-4 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-1 h-full bg-violet-500/50 rounded-r" />
-          <div className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 pl-2">
-            Точка Б
-          </div>
-          <div className="text-sm text-zinc-300 pl-2">{project.point_b || "—"}</div>
+        <div className="border border-white/[0.04] rounded-lg p-4">
+          <div className="text-[9px] text-white/15 uppercase tracking-widest mb-2">Точка Б</div>
+          <div className="text-xs text-white/40">{project.point_b || "—"}</div>
         </div>
       </div>
 
       {/* Progress */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-3">
-          <span className="text-xs text-zinc-600 uppercase tracking-widest">Прогресс</span>
-          <span className="text-2xl font-bold tracking-tight">{progress}%</span>
+          <span className="text-[9px] text-white/15 uppercase tracking-widest">Прогресс</span>
+          <span className="text-xl font-light text-white/60">{progress}%</span>
         </div>
 
-        {/* Glowing progress bar */}
-        <div className="h-2.5 bg-white/[0.04] rounded-full overflow-hidden mb-4">
-          <div
-            className="h-full rounded-full transition-all duration-500"
-            style={{
-              width: `${progress}%`,
-              background: "linear-gradient(90deg, #7c3aed, #8b5cf6, #a78bfa)",
-              boxShadow: "0 0 16px rgba(139,92,246,0.4)",
-            }}
-          />
+        <div className="h-1 bg-white/[0.04] rounded-full overflow-hidden mb-4">
+          <div className="h-full bg-white/30 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
         </div>
 
-        {/* Quick buttons */}
-        <div className="flex gap-1.5">
+        <div className="flex gap-1">
           {[0, 10, 25, 50, 75, 100].map((v) => (
-            <button
-              key={v}
-              onClick={() => handleProgress(v)}
-              className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
-                progress === v
-                  ? "bg-violet-600 text-white shadow-lg shadow-violet-500/20"
-                  : "bg-white/[0.03] text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06]"
-              }`}
-            >
-              {v}%
+            <button key={v} onClick={() => setP(v)}
+              className={`flex-1 py-2 rounded-lg text-[10px] transition-all ${
+                progress === v ? "bg-white/10 text-white/70" : "text-white/15 hover:text-white/30 hover:bg-white/[0.03]"
+              }`}>
+              {v}
             </button>
           ))}
         </div>
 
-        {/* Fine controls */}
-        <div className="flex items-center justify-center gap-5 mt-4">
-          <button
-            onClick={() => handleProgress(Math.max(0, progress - 5))}
-            className="w-9 h-9 rounded-full bg-white/[0.04] text-zinc-500 hover:text-white hover:bg-white/[0.08] flex items-center justify-center transition-all text-sm"
-          >
-            −
-          </button>
-          <div className="w-16 text-center">
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={progress}
-              onChange={(e) => handleProgress(Number(e.target.value))}
-              className="w-full accent-violet-500 cursor-pointer"
-            />
-          </div>
-          <button
-            onClick={() => handleProgress(Math.min(100, progress + 5))}
-            className="w-9 h-9 rounded-full bg-white/[0.04] text-zinc-500 hover:text-white hover:bg-white/[0.08] flex items-center justify-center transition-all text-sm"
-          >
-            +
-          </button>
+        <div className="flex items-center justify-center gap-4 mt-3">
+          <button onClick={() => setP(Math.max(0, progress - 5))}
+            className="w-8 h-8 rounded-full border border-white/[0.06] text-white/20 hover:text-white/40 flex items-center justify-center transition text-xs">−</button>
+          <input type="range" min={0} max={100} value={progress} onChange={(e) => setP(Number(e.target.value))}
+            className="w-24 accent-white opacity-30 hover:opacity-60 transition cursor-pointer" />
+          <button onClick={() => setP(Math.min(100, progress + 5))}
+            className="w-8 h-8 rounded-full border border-white/[0.06] text-white/20 hover:text-white/40 flex items-center justify-center transition text-xs">+</button>
         </div>
       </div>
 
       {/* Milestones */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
-          <span className="text-xs text-zinc-600 uppercase tracking-widest">
-            Этапы · {completed}/{milestones.length}
-          </span>
-          {milestones.length > 0 && (
-            <div className="flex items-center gap-2">
-              <div className="w-20 h-1 bg-white/[0.04] rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-green-500 transition-all duration-500"
-                  style={{ width: `${msPct}%` }}
-                />
-              </div>
-              <span className="text-[10px] text-zinc-600">{Math.round(msPct)}%</span>
-            </div>
-          )}
+          <span className="text-[9px] text-white/15 uppercase tracking-widest">Этапы · {done}/{milestones.length}</span>
         </div>
 
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           {milestones.map((m) => (
-            <div
-              key={m.id}
-              className={`flex items-center gap-3 py-2.5 px-3 rounded-lg transition-all duration-200 group ${
-                m.is_completed ? "bg-white/[0.01]" : "hover:bg-white/[0.02]"
-              }`}
-            >
-              <button
-                onClick={() => toggleMilestone(m.id, !m.is_completed)}
-                className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px] transition-all shrink-0 ${
-                  m.is_completed
-                    ? "bg-green-500/20 border-green-500/50 text-green-400"
-                    : "border-zinc-700 text-transparent hover:border-zinc-500"
-                }`}
-              >
-                ✓
-              </button>
-              <span
-                className={`flex-1 text-sm transition ${
-                  m.is_completed ? "text-zinc-600 line-through" : "text-zinc-300"
-                }`}
-              >
-                {m.title}
-              </span>
-              <button
-                onClick={() => deleteMilestone(m.id)}
-                className="text-zinc-800 hover:text-red-400 opacity-0 group-hover:opacity-100 text-xs transition-all"
-              >
-                ×
-              </button>
+            <div key={m.id} className={`flex items-center gap-3 py-2.5 px-2 rounded-lg group ${m.is_completed ? "" : "hover:bg-white/[0.02]"} transition`}>
+              <button onClick={() => toggleMs(m.id, !m.is_completed)}
+                className={`w-4 h-4 rounded-full border flex items-center justify-center text-[8px] transition shrink-0 ${
+                  m.is_completed ? "border-white/20 text-white/40" : "border-white/10 text-transparent hover:border-white/20"
+                }`}>✓</button>
+              <span className={`flex-1 text-xs transition ${m.is_completed ? "text-white/15 line-through" : "text-white/40"}`}>{m.title}</span>
+              <button onClick={() => delMs(m.id)} className="text-white/0 group-hover:text-white/15 hover:!text-white/30 text-xs transition">×</button>
             </div>
           ))}
         </div>
 
-        <form onSubmit={handleAddMilestone} className="flex gap-2 mt-3">
-          <input
-            type="text"
-            value={newMs}
-            onChange={(e) => setNewMs(e.target.value)}
-            placeholder="Новый этап..."
-            className="flex-1 bg-white/[0.03] border border-white/[0.05] rounded-lg px-3 py-2.5 text-sm text-white placeholder-zinc-700 focus:outline-none focus:border-violet-500/30 transition-all"
-          />
-          <button
-            type="submit"
-            disabled={!newMs.trim()}
-            className="bg-violet-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-violet-500 transition-all disabled:opacity-20 disabled:hover:bg-violet-600"
-          >
-            +
-          </button>
+        <form onSubmit={addMs} className="flex gap-2 mt-3">
+          <input type="text" value={newMs} onChange={(e) => setNewMs(e.target.value)} placeholder="Новый этап..."
+            className="flex-1 bg-transparent border border-white/[0.04] rounded-lg px-3 py-2 text-xs text-white/50 placeholder-white/10 focus:outline-none focus:border-white/10 transition" />
+          <button type="submit" disabled={!newMs.trim()}
+            className="border border-white/10 text-white/30 px-3 py-2 rounded-lg text-xs hover:text-white/50 transition disabled:opacity-10">+</button>
         </form>
       </div>
     </div>
