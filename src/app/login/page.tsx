@@ -33,12 +33,26 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        <h1 className="text-3xl font-bold text-white text-center mb-2">
+    <div className="min-h-screen bg-black flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background effect */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-violet-600/[0.04] rounded-full blur-[120px]" />
+      </div>
+
+      <div className="w-full max-w-sm relative animate-fade-in">
+        {/* Logo */}
+        <div className="flex justify-center mb-8">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center shadow-lg shadow-violet-500/20">
+            <span className="text-white text-xl font-bold">L</span>
+          </div>
+        </div>
+
+        <h1 className="text-2xl font-bold text-white text-center mb-1 tracking-tight">
           Life Matrix
         </h1>
-        <p className="text-zinc-500 text-center mb-8">Войдите в аккаунт</p>
+        <p className="text-zinc-500 text-center mb-8 text-sm">
+          Войдите в аккаунт
+        </p>
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <input
@@ -46,7 +60,7 @@ export default function LoginPage() {
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600"
+            className="w-full bg-white/[0.04] border border-white/[0.06] rounded-xl px-4 py-3.5 text-white placeholder-zinc-600 focus:outline-none focus:border-violet-500/30 focus:bg-white/[0.06] transition-all text-sm"
             required
           />
           <input
@@ -54,26 +68,31 @@ export default function LoginPage() {
             placeholder="Пароль"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600"
+            className="w-full bg-white/[0.04] border border-white/[0.06] rounded-xl px-4 py-3.5 text-white placeholder-zinc-600 focus:outline-none focus:border-violet-500/30 focus:bg-white/[0.06] transition-all text-sm"
             required
           />
 
           {error && (
-            <p className="text-red-400 text-sm text-center">{error}</p>
+            <p className="text-red-400 text-xs text-center bg-red-400/[0.06] rounded-lg py-2">
+              {error}
+            </p>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-white text-black font-bold py-3 rounded-xl hover:bg-zinc-200 transition disabled:opacity-50"
+            className="w-full bg-white text-black font-semibold py-3.5 rounded-xl hover:bg-zinc-100 transition-all disabled:opacity-50 text-sm"
           >
             {loading ? "Вход..." : "Войти"}
           </button>
         </form>
 
-        <p className="text-zinc-600 text-center mt-4 text-sm">
+        <p className="text-zinc-600 text-center mt-6 text-xs">
           Нет аккаунта?{" "}
-          <Link href="/register" className="text-zinc-400 hover:text-white">
+          <Link
+            href="/register"
+            className="text-zinc-400 hover:text-white transition"
+          >
             Зарегистрироваться
           </Link>
         </p>
