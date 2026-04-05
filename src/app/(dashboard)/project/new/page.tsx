@@ -19,12 +19,9 @@ export default function NewProjectPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim() || !sphereId) return;
-
     setSaving(true);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
     await supabase.from("projects").insert({
@@ -40,20 +37,25 @@ export default function NewProjectPage() {
     router.refresh();
   }
 
+  const inputCls =
+    "w-full bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-3.5 text-white placeholder-zinc-700 focus:outline-none focus:border-violet-500/30 focus:bg-white/[0.05] transition-all text-sm";
+
   return (
-    <div className="max-w-md">
+    <div className="max-w-md animate-fade-in relative">
+      <div className="absolute -top-20 -right-20 w-[200px] h-[200px] rounded-full bg-violet-600/[0.03] blur-[100px] pointer-events-none" />
+
       <Link
         href={sphereId ? `/sphere/${sphereId}` : "/"}
-        className="text-zinc-500 hover:text-white text-sm mb-4 inline-block"
+        className="text-zinc-600 hover:text-zinc-300 text-xs mb-6 inline-flex items-center gap-1.5 transition"
       >
-        ← Назад
+        <span>←</span> Назад
       </Link>
 
-      <h2 className="text-xl font-bold mb-6">Новый проект</h2>
+      <h2 className="text-2xl font-bold tracking-tight mb-8">Новый проект</h2>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-          <label className="block text-xs text-zinc-500 uppercase tracking-wide mb-2">
+          <label className="block text-[10px] text-zinc-600 uppercase tracking-widest mb-2.5">
             Название
           </label>
           <input
@@ -61,54 +63,64 @@ export default function NewProjectPage() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Например: Пробежать марафон"
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600"
+            className={inputCls}
             required
           />
         </div>
 
-        <div>
-          <label className="block text-xs text-zinc-500 uppercase tracking-wide mb-2">
-            Точка А — где сейчас
-          </label>
-          <input
-            type="text"
-            value={pointA}
-            onChange={(e) => setPointA(e.target.value)}
-            placeholder="Не могу пробежать 1 км"
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600"
-          />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[10px] text-zinc-600 uppercase tracking-widest mb-2.5">
+              Точка А
+            </label>
+            <input
+              type="text"
+              value={pointA}
+              onChange={(e) => setPointA(e.target.value)}
+              placeholder="Где сейчас"
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] text-zinc-600 uppercase tracking-widest mb-2.5">
+              Точка Б
+            </label>
+            <input
+              type="text"
+              value={pointB}
+              onChange={(e) => setPointB(e.target.value)}
+              placeholder="Куда хочу"
+              className={inputCls}
+            />
+          </div>
         </div>
 
         <div>
-          <label className="block text-xs text-zinc-500 uppercase tracking-wide mb-2">
-            Точка Б — куда хочу
-          </label>
-          <input
-            type="text"
-            value={pointB}
-            onChange={(e) => setPointB(e.target.value)}
-            placeholder="Пробежать марафон 42 км"
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs text-zinc-500 uppercase tracking-wide mb-2">
-            Описание (опционально)
+          <label className="block text-[10px] text-zinc-600 uppercase tracking-widest mb-2.5">
+            Описание <span className="text-zinc-800">· опционально</span>
           </label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Детали, заметки..."
             rows={3}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600 resize-none"
+            className={`${inputCls} resize-none`}
           />
         </div>
 
+        {/* Preview */}
+        {(pointA || pointB) && (
+          <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-4 flex items-center gap-3">
+            <span className="text-xs text-zinc-500">{pointA || "?"}</span>
+            <div className="flex-1 h-px bg-gradient-to-r from-zinc-700 via-violet-500/30 to-zinc-700" />
+            <span className="text-xs text-violet-400">{pointB || "?"}</span>
+          </div>
+        )}
+
         <button
           type="submit"
-          disabled={saving}
-          className="w-full bg-white text-black font-bold py-3 rounded-xl hover:bg-zinc-200 transition disabled:opacity-50"
+          disabled={saving || !title.trim()}
+          className="w-full bg-white text-black font-semibold py-3.5 rounded-xl hover:bg-zinc-100 transition-all text-sm disabled:opacity-30"
         >
           {saving ? "Создание..." : "Создать проект"}
         </button>
